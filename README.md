@@ -4,6 +4,7 @@ Run BASH commands across all gateways on given domain on MDM.
 
 
 
+
 [ Instructions ] 
 
 1. Enter relevant API/Domain Information
@@ -19,14 +20,15 @@ Run BASH commands across all gateways on given domain on MDM.
 
 From my Lab: 
 
-Example: 
-
 fw stat ~ taking around 10 seconds to complete task on gateway 
+
 hostname ~ took around 1 second
+
 ioc_feeds commands ~ may take around 20 - 30 seconds per gateway
 
 
 5. Monitor the task output. 
+
 
 
 [ API Log ] 
