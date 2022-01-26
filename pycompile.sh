@@ -3,6 +3,8 @@
 filename="gw_bulk.py"
 rmpy=${filename%.py}
 
+read -p "Enter git comment: " com
+
 vi $filename
 
 printf "Clear directories / files \n"
@@ -13,3 +15,9 @@ printf "run pyinstaller for gw_rename.py\n"
 
 printf "copy file over to remote server\n"
 sshpass -p 'vpn123' scp dist/$rmpy admin@172.25.84.166:/home/admin
+
+git add $filename dist/ pycompile.sh
+git commit -m "$com"
+
+git push -u origin main 
+

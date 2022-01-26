@@ -278,11 +278,14 @@ def main():
 
     helpmenu()
 
-    global sid 
-    sid = login()
+    askConfig()
+    gw_mkdir()
 
     global url
     url = f'https://{api_ip}:{api_port}/web_api'
+
+    global sid 
+    sid = login()
 
     # get gateways and cluster lists from domain / API
     show_simple('gateways', body = {})
