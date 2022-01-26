@@ -1,3 +1,4 @@
+from socket import timeout
 import requests 
 import urllib3
 import json
@@ -10,13 +11,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # global variables 
 global gwbullk
-gwbulk = '/tmp/gw_bulk/gw_bulk_'
+gwbulk = '/tmp/gw_bulk'
+global fpath
+fpath = f'{gwbulk}/gw_bulk_'
 global log
-log = f'{gwbulk}log.log'
+log = f'{fpath}log.log'
 
 # logout of existing session and end script
 def end():
-        logout(sid)
+        logout()
         sys.exit(0)
 
 # -d or -h
@@ -92,22 +95,21 @@ Domain Name = {domain}
         print("\nContinuing... \n")
 
 # make log directory / clear old log files
-def gw_mkdir():
+def makedir():
 
     print(f'[ Dir: {gwbulk} ]\n')
 
     if os.path.isdir(gwbulk):
-        print('... Exists!\n')
+        print(f'... {gwbulk} Exists!\n')
         print('\n[ Clearing old logs ]\n')
-        os.system(f'rm -v {gwbulk}/gw_rename_*')
+        os.system(f'rm -v {fpath}*')
     else:
-        print(f'... Created!\n')
+        print(f'... {gwbulk} Created!\n')
         os.mkdir(gwbulk)
 
 # sleep function
 def sleeptime(timeval): 
     time.sleep(timeval)
-
 
 ###Debugging Functions###
 # take any input to pause script
@@ -158,6 +160,8 @@ def login():
         print(f'{response}... Log in Successful.\n')
     else: 
         print(f'{response}... Login Failed.\n')
+
+    return result
 
 # API Publish 
 def publish(): 
@@ -218,7 +222,6 @@ def show_simple(config, body):
     x = sid["sid"]
     headers = {'Content-Type' : 'application/json',
                 'X-chkp-sid' : f'{x}'} 
-    body = {}
 
     api_post = requests.post(api_url, data=json.dumps(body), headers=headers, verify=False)
     result = api_post.json()
@@ -241,31 +244,25 @@ def show_simple(config, body):
             clusterlist.append(i['name'])
         print(f"[ API: CLUSTER OBJECT LIST ]\n{clusterlist}\n")
 
-    if config == 'members':
+    if config == 'cluster':
         global memberlist
         memberlist = [] 
         for i in result['cluster-members']:
             memberlist.append(i['name'])
-        print(f"[ API: CLUSTER MEMBER LIST ]\n{memberlist}\n")
+        # print(f"[ API: CLUSTER MEMBER LIST ]\n{memberlist}\n")
     
 
-### Collect script from user ###
-def runscript(): 
 
-    print(f"\n[ API: Run-Script : {domain}]\n")
-    defname = f"API : Run-Script : {domain}"
+def showtask(taskid): 
 
-    global cmd
-    cmd = question("Paste entire command below to run on gateways")
+    print(f"\n[ API: Show-Task : {taskid}]\n")
+    defname = f"API : Show-Task : {taskid}"
     
-    api_url = f'{url}/run-script'
+    api_url = f'{url}/show-task'
     x = sid["sid"]
     headers = {'Content-Type' : 'application/json',
                 'X-chkp-sid' : f'{x}'} 
-    body = {'script-name' : f'{defname}',
-    'script' : f'{cmd}',
-    'targets' : f'{targets}',
-    'comments' : f'{cmd}'}
+    body = {'task-id' : f'{taskid}', 'details-level' : 'full'}
 
     api_post = requests.post(api_url, data=json.dumps(body), headers=headers, verify=False)
     result = api_post.json()
@@ -273,13 +270,45 @@ def runscript():
     sleeptime(1)
     api_debug(defname, api_url, headers, body, result, api_post)
 
+    return result
+
+
+### Collect script from user ###
+def runscript(target): 
+
+    print(f"\n[ API: Run-Script : {target}]\n")
+    defname = f"API : Run-Script : {target}"
+    
+    api_url = f'{url}/run-script'
+    x = sid["sid"]
+    headers = {'Content-Type' : 'application/json',
+                'X-chkp-sid' : f'{x}'} 
+    body = {'script-name' : f'{defname}',
+    'script' : f'{cmd}',
+    'targets' : [ f'{target}' ] }
+
+    api_post = requests.post(api_url, data=json.dumps(body), headers=headers, verify=False)
+    result = api_post.json()
+
+    sleeptime(1)
+    api_debug(defname, api_url, headers, body, result, api_post)
+
+    answer = showtask(result['tasks'][0]['task-id'])
+    sleeptime(int(timeout))
+
+    try:
+        print(answer['tasks'][0]['task-details'][0]['statusDescription'])
+    except Exception as e:
+        print(f'Error: {e} \n')
+        pass
+
 
 def main():
 
     helpmenu()
 
     askConfig()
-    gw_mkdir()
+    makedir()
 
     global url
     url = f'https://{api_ip}:{api_port}/web_api'
@@ -288,21 +317,33 @@ def main():
     sid = login()
 
     # get gateways and cluster lists from domain / API
-    show_simple('gateways', body = {})
-    show_simple('clusters', body = {})
+    show_simple('gateways', body = {'details-level' : 'full'})
+    show_simple('clusters', body = {'details-level' : 'full'})
 
     global completemembers
     completemembers = [] 
 
     for c in clusterlist:
-        show_simple('members', body = {'name' : f'{c}'})
+        show_simple('cluster', body = {'name' : f'{c}', 'details-level' : 'full'})
         completemembers.append(memberlist)
     print(f"[ API: COMPLETE MEMBER LIST ]\n{completemembers}\n")
     
-    global targets
-    targets = gatewaylist + completemembers
 
-    runscript()
+    completemembers.append(gatewaylist)
+    makeonelist = []
+    for t in completemembers:
+        for x in t:
+            makeonelist.append(x)
+    print(f"[ API: FINISHED TARGET LIST ]\n{makeonelist}\n")
+
+    global cmd
+    cmd = question("Paste entire command below to run on gateways")
+
+    global timeout
+    timeout = question("DEPENDING ON COMMANDS/ENVIRONMENTS, larger timeout is required (5 or 10 or 15)\nEnter timeout")
+
+    for m in makeonelist:
+        runscript(m)
 
 
 if __name__=="__main__":
